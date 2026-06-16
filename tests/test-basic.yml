@@ -1,0 +1,31 @@
+name: Test basic usage with source-dir and build-dir
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          source-dir: ${{ github.workspace }}/actions/hardened/threeal--cmake-action/v2.1.0/tests/fixtures/simple-project
+          build-dir: ${{ github.workspace }}/cmake-build-output
+          run-build: "true"
+      - name: Assert build-dir output
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "build-dir output: $BUILD_DIR"
+          if [ -z "$BUILD_DIR" ]; then
+            echo "FAIL: build-dir output is empty"
+            exit 1
+          fi
+          echo "PASS: build-dir output is set to $BUILD_DIR"
+      - name: Assert build directory exists
+        run: |
+          if [ ! -d "${{ github.workspace }}/cmake-build-output" ]; then
+            echo "FAIL: build directory was not created"
+            exit 1
+          fi
+          echo "PASS: build directory exists"
