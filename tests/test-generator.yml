@@ -1,0 +1,63 @@
+name: Test Custom Generator
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and make
+        run: |
+          apt-get update -y && apt-get install -y cmake gcc make 2>/dev/null || \
+          (sudo apt-get update -y && sudo apt-get install -y cmake gcc make)
+
+      - name: Create a simple CMake project
+        run: |
+          mkdir -p /tmp/cmake-project-gen
+          cat > /tmp/cmake-project-gen/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(HelloWorld)
+          add_executable(hello main.c)
+          EOF
+          cat > /tmp/cmake-project-gen/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+            printf("Hello, World!\n");
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-project-gen
+          build-dir: /tmp/cmake-build-gen
+          generator: Unix Makefiles
+
+      - name: Assert build-dir output
+        env:
+          ACTUAL: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "actual build-dir: $ACTUAL"
+          if [ "$ACTUAL" != "/tmp/cmake-build-gen" ]; then
+            echo "FAIL: expected build-dir to be '/tmp/cmake-build-gen', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: build-dir output is correct"
+
+      - name: Assert Makefile was generated (Unix Makefiles generator)
+        run: |
+          if [ ! -f "/tmp/cmake-build-gen/Makefile" ]; then
+            echo "FAIL: Makefile not found — Unix Makefiles generator did not produce it"
+            exit 1
+          fi
+          echo "PASS: Makefile found (Unix Makefiles generator worked)"
+
+      - name: Assert executable was built
+        run: |
+          if [ ! -f "/tmp/cmake-build-gen/hello" ]; then
+            echo "FAIL: hello executable not found in build directory"
+            exit 1
+          fi
+          echo "PASS: hello executable found"

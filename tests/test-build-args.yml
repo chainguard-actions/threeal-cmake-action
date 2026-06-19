@@ -1,0 +1,63 @@
+name: Test Additional CMake Build Args
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and gcc
+        run: |
+          apt-get update -y && apt-get install -y cmake gcc 2>/dev/null || \
+          (sudo apt-get update -y && sudo apt-get install -y cmake gcc)
+
+      - name: Create a simple CMake project
+        run: |
+          mkdir -p /tmp/cmake-project-bargs
+          cat > /tmp/cmake-project-bargs/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(HelloWorld)
+          add_executable(hello main.c)
+          EOF
+          cat > /tmp/cmake-project-bargs/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+            printf("Hello, World!\n");
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-project-bargs
+          build-dir: /tmp/cmake-build-bargs
+          build-args: --verbose
+
+      - name: Assert build-dir output
+        env:
+          ACTUAL: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "actual build-dir: $ACTUAL"
+          if [ "$ACTUAL" != "/tmp/cmake-build-bargs" ]; then
+            echo "FAIL: expected build-dir to be '/tmp/cmake-build-bargs', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: build-dir output is correct"
+
+      - name: Assert CMake cache was created
+        run: |
+          if [ ! -f "/tmp/cmake-build-bargs/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found — configure step did not run"
+            exit 1
+          fi
+          echo "PASS: CMakeCache.txt found"
+
+      - name: Assert executable was built
+        run: |
+          if [ ! -f "/tmp/cmake-build-bargs/hello" ]; then
+            echo "FAIL: hello executable not found in build directory"
+            exit 1
+          fi
+          echo "PASS: hello executable found"

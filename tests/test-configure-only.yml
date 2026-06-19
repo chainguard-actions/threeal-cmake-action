@@ -1,0 +1,63 @@
+name: Test Configure Only (No Build)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake
+        run: |
+          apt-get update -y && apt-get install -y cmake gcc 2>/dev/null || \
+          (sudo apt-get update -y && sudo apt-get install -y cmake gcc)
+
+      - name: Create a simple CMake project
+        run: |
+          mkdir -p /tmp/cmake-project-cfg
+          cat > /tmp/cmake-project-cfg/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(HelloWorld)
+          add_executable(hello main.c)
+          EOF
+          cat > /tmp/cmake-project-cfg/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+            printf("Hello, World!\n");
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-project-cfg
+          build-dir: /tmp/cmake-build-cfg
+          run-build: false
+
+      - name: Assert build-dir output
+        env:
+          ACTUAL: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "actual build-dir: $ACTUAL"
+          if [ "$ACTUAL" != "/tmp/cmake-build-cfg" ]; then
+            echo "FAIL: expected build-dir to be '/tmp/cmake-build-cfg', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: build-dir output is correct"
+
+      - name: Assert CMake cache was created (configure ran)
+        run: |
+          if [ ! -f "/tmp/cmake-build-cfg/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found — configure step did not run"
+            exit 1
+          fi
+          echo "PASS: CMakeCache.txt found (configure ran)"
+
+      - name: Assert executable was NOT built
+        run: |
+          if [ -f "/tmp/cmake-build-cfg/hello" ]; then
+            echo "FAIL: hello executable found — build should not have run"
+            exit 1
+          fi
+          echo "PASS: hello executable not found (build was skipped)"

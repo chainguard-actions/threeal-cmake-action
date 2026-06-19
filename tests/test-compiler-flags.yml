@@ -1,0 +1,84 @@
+name: Test Compiler Flags (c-flags and cxx-flags)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and gcc
+        run: |
+          apt-get update -y && apt-get install -y cmake gcc g++ 2>/dev/null || \
+          (sudo apt-get update -y && sudo apt-get install -y cmake gcc g++)
+
+      - name: Create a simple CMake project with C and C++ sources
+        run: |
+          mkdir -p /tmp/cmake-project-flags
+          cat > /tmp/cmake-project-flags/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(HelloWorld)
+          add_executable(hello main.c)
+          add_executable(hellocpp main.cpp)
+          EOF
+          cat > /tmp/cmake-project-flags/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+            printf("Hello from C!\n");
+            return 0;
+          }
+          EOF
+          cat > /tmp/cmake-project-flags/main.cpp << 'EOF'
+          #include <cstdio>
+          int main() {
+            printf("Hello from C++!\n");
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-project-flags
+          build-dir: /tmp/cmake-build-flags
+          c-flags: -Wall
+          cxx-flags: -Wall
+
+      - name: Assert build-dir output
+        env:
+          ACTUAL: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "actual build-dir: $ACTUAL"
+          if [ "$ACTUAL" != "/tmp/cmake-build-flags" ]; then
+            echo "FAIL: expected build-dir to be '/tmp/cmake-build-flags', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: build-dir output is correct"
+
+      - name: Assert CMake cache was created
+        run: |
+          if [ ! -f "/tmp/cmake-build-flags/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found in build directory"
+            exit 1
+          fi
+          echo "PASS: CMakeCache.txt found"
+
+      - name: Assert C flags were applied in CMake cache
+        run: |
+          if ! grep -q "CMAKE_C_FLAGS" /tmp/cmake-build-flags/CMakeCache.txt; then
+            echo "FAIL: CMAKE_C_FLAGS not found in CMakeCache.txt"
+            exit 1
+          fi
+          echo "PASS: CMAKE_C_FLAGS found in CMakeCache.txt"
+
+      - name: Assert executables were built
+        run: |
+          if [ ! -f "/tmp/cmake-build-flags/hello" ]; then
+            echo "FAIL: hello (C) executable not found"
+            exit 1
+          fi
+          if [ ! -f "/tmp/cmake-build-flags/hellocpp" ]; then
+            echo "FAIL: hellocpp (C++) executable not found"
+            exit 1
+          fi
+          echo "PASS: both executables found"
