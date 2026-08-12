@@ -1,0 +1,67 @@
+name: Test CMake with C compiler and C flags
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake gcc
+
+      - name: Run CMake action with c-compiler and c-flags
+        id: action
+        uses: .
+        with:
+          source-dir: tests/fixtures/c-project
+          build-dir: /tmp/cmake-c-compiler-build
+          c-compiler: gcc
+          c-flags: "-Wall"
+          run-build: "false"
+          run-test: "false"
+
+      - name: Assert CMakeCache.txt was created (configure succeeded)
+        run: |
+          BUILD_DIR="/tmp/cmake-c-compiler-build"
+          echo "Checking for CMakeCache.txt in $BUILD_DIR"
+          if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found — configure step did not succeed"
+            ls -la "$BUILD_DIR" || echo "(build dir does not exist)"
+            exit 1
+          fi
+          echo "PASS: CMakeCache.txt found"
+
+      - name: Assert C compiler is set in cache
+        run: |
+          BUILD_DIR="/tmp/cmake-c-compiler-build"
+          echo "Checking CMakeCache.txt for CMAKE_C_COMPILER..."
+          if ! grep -q "CMAKE_C_COMPILER" "$BUILD_DIR/CMakeCache.txt"; then
+            echo "FAIL: CMAKE_C_COMPILER not found in CMakeCache.txt"
+            exit 1
+          fi
+          ACTUAL=$(grep "CMAKE_C_COMPILER:FILEPATH" "$BUILD_DIR/CMakeCache.txt" | cut -d= -f2)
+          echo "actual CMAKE_C_COMPILER: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: CMAKE_C_COMPILER is empty in cache"
+            exit 1
+          fi
+          echo "PASS: CMAKE_C_COMPILER is set to '$ACTUAL'"
+
+      - name: Assert C flags are set in cache
+        run: |
+          BUILD_DIR="/tmp/cmake-c-compiler-build"
+          echo "Checking CMakeCache.txt for CMAKE_C_FLAGS..."
+          if ! grep -q "CMAKE_C_FLAGS" "$BUILD_DIR/CMakeCache.txt"; then
+            echo "FAIL: CMAKE_C_FLAGS not found in CMakeCache.txt"
+            exit 1
+          fi
+          ACTUAL=$(grep "CMAKE_C_FLAGS:STRING" "$BUILD_DIR/CMakeCache.txt" | cut -d= -f2)
+          echo "actual CMAKE_C_FLAGS: $ACTUAL"
+          if [ "$ACTUAL" != "-Wall" ]; then
+            echo "FAIL: expected CMAKE_C_FLAGS=-Wall, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: CMAKE_C_FLAGS=-Wall confirmed in CMakeCache.txt"

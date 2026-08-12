@@ -1,0 +1,45 @@
+name: Test CMake with additional options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake g++
+
+      - name: Run CMake action with custom options
+        id: action
+        uses: .
+        with:
+          source-dir: tests/fixtures/simple-project
+          build-dir: /tmp/cmake-options-build
+          options: CMAKE_BUILD_TYPE=Release
+          run-build: "false"
+          run-test: "false"
+
+      - name: Assert CMakeCache.txt contains the custom option
+        run: |
+          CACHE_FILE="/tmp/cmake-options-build/CMakeCache.txt"
+          echo "Checking CMakeCache.txt for CMAKE_BUILD_TYPE=Release"
+          if [ ! -f "$CACHE_FILE" ]; then
+            echo "FAIL: CMakeCache.txt not found"
+            ls -la /tmp/cmake-options-build || echo "(build dir does not exist)"
+            exit 1
+          fi
+          if ! grep -q "CMAKE_BUILD_TYPE" "$CACHE_FILE"; then
+            echo "FAIL: CMAKE_BUILD_TYPE not found in CMakeCache.txt"
+            grep -i build_type "$CACHE_FILE" || true
+            exit 1
+          fi
+          ACTUAL=$(grep "CMAKE_BUILD_TYPE:STRING" "$CACHE_FILE" | cut -d= -f2)
+          echo "actual CMAKE_BUILD_TYPE: $ACTUAL"
+          if [ "$ACTUAL" != "Release" ]; then
+            echo "FAIL: expected CMAKE_BUILD_TYPE=Release but got $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: CMAKE_BUILD_TYPE=Release found in CMakeCache.txt"

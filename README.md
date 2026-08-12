@@ -1,15 +1,107 @@
-# threeal/cmake-action
+# CMake Action
 
-Configure and build CMake projects
+[![Latest Version](https://img.shields.io/github/v/release/threeal/cmake-action)](https://github.com/threeal/cmake-action/releases/)
+[![License](https://img.shields.io/github/license/threeal/cmake-action)](./LICENSE)
+[![Test Status](https://img.shields.io/github/actions/workflow/status/threeal/cmake-action/test.yml?label=test&branch=main)](https://github.com/threeal/cmake-action/actions/workflows/test.yml)
 
-Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at [https://github.com/threeal/cmake-action](https://github.com/threeal/cmake-action).
+Configure, build, and test your [CMake](https://cmake.org/) project using [GitHub Actions](https://github.com/features/actions). This action simplifies the workflow for your CMake project. It configures the build environment using the `cmake` command, and optionally builds the project using the `cmake --build` command and tests the project using the `ctest` command.
 
-## Versions
+## Features
 
-| Version | Tag | Upstream commit |
-|---------|-----|-----------------|
-| v2.0.0 | [`v2.0.0`](https://github.com/chainguard-actions/threeal-cmake-action/tree/v2.0.0) | [`f0425ca`](https://github.com/threeal/cmake-action/commit/f0425ca4df398f15fcdb5a2dd32d540fd6f22dcd) |
-| v2.1.0 | [`v2.1.0`](https://github.com/chainguard-actions/threeal-cmake-action/tree/v2.1.0) | [`725d131`](https://github.com/threeal/cmake-action/commit/725d1314ccf9ea922805d7e3f9d9bcbca892b406) |
+- Configures a project using the [`cmake`](https://cmake.org/cmake/help/latest/manual/cmake.1.html) command.
+- Option to build a project using the `cmake --build` command.
+- Option to test a project using the [`ctest`](https://cmake.org/cmake/help/latest/manual/ctest.1.html) command.
+- Auto-detects and installs required dependencies.
+- Supports specifying multiple CMake options directly from the Action inputs.
+
+## Usage
+
+For more information, refer to [action.yml](./action.yml) and the [GitHub Actions guide](https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions).
+
+### Inputs
+
+| Name | Value Type | Description |
+| --- | --- | --- |
+| `source-dir` | Path | The source directory of the CMake project. It defaults to the current directory. |
+| `build-dir` | Path | The build directory of the CMake project. It defaults to the `build` directory inside the source directory. |
+| `generator` | String | The build system generator for the CMake project. It appends the CMake configuration arguments with `-G [val]`. |
+| `c-compiler` | String | The preferred executable for compiling C language files. It appends the CMake configuration arguments with `-D CMAKE_C_COMPILER=[val]`. |
+| `cxx-compiler` | String | The preferred executable for compiling C++ language files. It appends the CMake configuration arguments with `-D CMAKE_CXX_COMPILER=[val]`. |
+| `c-flags` | Multiple strings | Additional flags to pass when compiling C language files. It appends the CMake configuration arguments with `-D CMAKE_C_FLAGS=[vals]`. |
+| `cxx-flags` | Multiple strings | Additional flags to pass when compiling C++ language files. It appends the CMake configuration arguments with `-D CMAKE_CXX_FLAGS=[vals]`. |
+| `options` | Multiple strings | Additional options to pass during the CMake configuration. It appends the CMake configuration arguments with each of `-D [val]`. |
+| `args` | Multiple strings | Additional arguments to pass during the CMake configuration. |
+| `run-build` | `true` or `false` | If enabled, it builds the project using CMake. It defaults to `false`. |
+| `build-args` | Multiple strings | Additional arguments to pass during the CMake build. |
+| `run-test` | `true` or `false` | If enabled, it runs testing using [CTest](https://cmake.org/cmake/help/latest/manual/ctest.1.html). It defaults to `false`. |
+| `test-args` | Multiple strings | Additional arguments to pass during the CTest run. |
+
+> **Note**: Multiple strings mean that the input can be specified with more than one value. Separate each value with a space or a new line.
+
+> **Note**: All inputs are optional.
+
+### Examples
+
+```yaml
+name: Build
+on:
+  push:
+jobs:
+  build-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3.5.3
+
+      - name: Configure the project
+        uses: threeal/cmake-action@main
+
+      - name: Build the project
+        runs: cmake --build build
+
+      - name: Test the project
+        runs: ctest --test-dir build
+```
+
+> **Note**: You can replace `@main` with any version you prefer. See [this](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsuses).
+
+#### Specify the Source and Build Directories
+
+```yaml
+- name: Configure the project
+  uses: threeal/cmake-action@main
+  with:
+    source-dir: submodules
+    build-dir: submodules/out
+```
+
+#### Configure, Build, and Test in the Same Step
+
+```yaml
+- name: Configure, build, and test the project
+  uses: threeal/cmake-action@main
+  with:
+    options: BUILD_TESTING=ON
+    run-build: true
+    run-test: true
+```
+
+#### Using Ninja as the Generator and Clang as the Compiler
+
+```yaml
+- name: Configure and build the project
+  uses: threeal/cmake-action@main
+  with:
+    generator: Ninja
+    c-compiler: clang
+    cxx-compiler: clang++
+```
+
+## License
+
+This project is licensed under the terms of the [MIT License](./LICENSE).
+
+Copyright © 2023 [Alfi Maulana](https://github.com/threeal/)
 
 ## Privacy
 

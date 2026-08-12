@@ -1,0 +1,52 @@
+name: Test CMake with custom build directory
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake g++
+
+      - name: Run CMake action with custom build directory
+        id: action
+        uses: .
+        with:
+          source-dir: tests/fixtures/simple-project
+          build-dir: /tmp/cmake-custom-build
+          run-build: "true"
+          run-test: "false"
+
+      - name: Assert CMakeCache.txt is in custom build dir
+        run: |
+          CUSTOM_BUILD="/tmp/cmake-custom-build"
+          echo "Checking for CMakeCache.txt in $CUSTOM_BUILD"
+          if [ ! -f "$CUSTOM_BUILD/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found in custom build dir $CUSTOM_BUILD"
+            ls -la "$CUSTOM_BUILD" || echo "(build dir does not exist)"
+            exit 1
+          fi
+          echo "PASS: CMakeCache.txt found in custom build dir"
+
+      - name: Assert binary is in custom build dir
+        run: |
+          CUSTOM_BUILD="/tmp/cmake-custom-build"
+          if [ ! -f "$CUSTOM_BUILD/hello_world" ]; then
+            echo "FAIL: hello_world binary not found in custom build dir $CUSTOM_BUILD"
+            ls -la "$CUSTOM_BUILD" || echo "(build dir does not exist)"
+            exit 1
+          fi
+          echo "PASS: binary found in custom build dir"
+
+      - name: Assert default build dir was NOT created
+        run: |
+          DEFAULT_BUILD="$GITHUB_WORKSPACE/tests/fixtures/simple-project/build"
+          if [ -d "$DEFAULT_BUILD" ]; then
+            echo "FAIL: default build dir $DEFAULT_BUILD was created but should not have been"
+            exit 1
+          fi
+          echo "PASS: default build dir was not created"

@@ -1,0 +1,44 @@
+name: Test CMake configure and build
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake g++
+
+      - name: Run CMake action (configure + build)
+        id: action
+        uses: .
+        with:
+          source-dir: tests/fixtures/simple-project
+          build-dir: /tmp/cmake-build-build
+          run-build: "true"
+          run-test: "false"
+
+      - name: Assert binary was produced (build succeeded)
+        run: |
+          BUILD_DIR="/tmp/cmake-build-build"
+          echo "Checking for hello_world binary in $BUILD_DIR"
+          if [ ! -f "$BUILD_DIR/hello_world" ]; then
+            echo "FAIL: hello_world binary not found — build step did not succeed"
+            ls -la "$BUILD_DIR" || echo "(build dir does not exist)"
+            exit 1
+          fi
+          echo "PASS: hello_world binary found"
+
+      - name: Assert binary is executable and runs correctly
+        run: |
+          BUILD_DIR="/tmp/cmake-build-build"
+          OUTPUT=$("$BUILD_DIR/hello_world")
+          echo "Output: $OUTPUT"
+          if [ "$OUTPUT" != "Hello, World!" ]; then
+            echo "FAIL: unexpected output from hello_world binary"
+            exit 1
+          fi
+          echo "PASS: binary output matches expected"

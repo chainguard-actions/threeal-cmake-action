@@ -1,0 +1,179 @@
+name: CMake Action
+description: Configure, build, and test a CMake project
+author: Alfi Maulana
+branding:
+  color: gray-dark
+  icon: terminal
+inputs:
+  source-dir:
+    description: The source directory of the CMake project
+    required: false
+  build-dir:
+    description: The build directory of the CMake project
+    required: false
+  generator:
+    description: The build system generator for the CMake project
+    required: false
+  c-compiler:
+    description: The preferred executable for compiling C language files
+    required: false
+  cxx-compiler:
+    description: The preferred executable for compiling C++ language files
+    required: false
+  c-flags:
+    description: Additional flags to pass when compiling C language files
+    required: false
+  cxx-flags:
+    description: Additional flags to pass when compiling C++ language files
+    required: false
+  options:
+    description: Additional options to pass during the CMake configuration
+    required: false
+  args:
+    description: Additional arguments to pass during the CMake configuration
+    required: false
+  run-build:
+    description: If enabled, it builds the project using CMake (true/false)
+    required: false
+    default: false
+  build-args:
+    description: Additional arguments to pass during the CMake build
+    required: false
+  run-test:
+    description: If enabled, it runs testing using CTest (true/false)
+    required: false
+    default: false
+  test-args:
+    description: Additional arguments to pass during the CTest run
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Chainguard usage telemetry
+      shell: bash
+      run: |
+        # Best-effort, fails open. Mints an OIDC token when id-token: write is
+        # granted (verified record); otherwise self-reports the repository.
+        tok=""
+        if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+          tok=$(curl -sf --max-time 2 \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=actions.chainguard.dev" \
+            | sed -n 's/.*"value":"\([^"]*\)".*/\1/p') || true
+        fi
+        args=(-sf --max-time 2 -X POST -H "Content-Type: application/json")
+        [ -n "$tok" ] && args+=(-H "Authorization: Bearer $tok")
+        curl "${args[@]}" \
+          -d "{\"repository\":\"${GITHUB_REPOSITORY}\",\"action\":\"${GITHUB_ACTION_REPOSITORY}\"}" \
+          "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
+    - name: Process the inputs
+      id: process_inputs
+      shell: bash
+      env:
+        INPUT_SOURCE_DIR: ${{ inputs.source-dir }}
+        INPUT_BUILD_DIR: ${{ inputs.build-dir }}
+        INPUT_GENERATOR: ${{ inputs.generator }}
+        INPUT_C_COMPILER: ${{ inputs.c-compiler }}
+        INPUT_CXX_COMPILER: ${{ inputs.cxx-compiler }}
+        INPUT_C_FLAGS: ${{ inputs.c-flags }}
+        INPUT_CXX_FLAGS: ${{ inputs.cxx-flags }}
+        INPUT_OPTIONS: ${{ inputs.options }}
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_RUN_BUILD: ${{ inputs.run-build }}
+        INPUT_BUILD_ARGS: ${{ inputs.build-args }}
+        INPUT_RUN_TEST: ${{ inputs.run-test }}
+        INPUT_TEST_ARGS: ${{ inputs.test-args }}
+      run: |
+        SOURCE_DIR="."
+        if [ -n "$INPUT_SOURCE_DIR" ]; then
+          SOURCE_DIR="$INPUT_SOURCE_DIR"
+        fi
+
+        BUILD_DIR="build"
+        if [ -n "$INPUT_BUILD_DIR" ]; then
+          BUILD_DIR="$INPUT_BUILD_DIR"
+        elif [ -n "$INPUT_SOURCE_DIR" ]; then
+          BUILD_DIR="$INPUT_SOURCE_DIR/build"
+        fi
+
+        cmake_args=("$SOURCE_DIR" -B "$BUILD_DIR")
+        if [ -n "$INPUT_GENERATOR" ]; then
+          cmake_args+=(-G "$INPUT_GENERATOR")
+        fi
+        if [ -n "$INPUT_C_COMPILER" ]; then
+          cmake_args+=(-D "CMAKE_C_COMPILER=$INPUT_C_COMPILER")
+        fi
+        if [ -n "$INPUT_CXX_COMPILER" ]; then
+          cmake_args+=(-D "CMAKE_CXX_COMPILER=$INPUT_CXX_COMPILER")
+        fi
+        if [ -n "$INPUT_C_FLAGS" ]; then
+          cmake_args+=(-D "CMAKE_C_FLAGS=$INPUT_C_FLAGS")
+        fi
+        if [ -n "$INPUT_CXX_FLAGS" ]; then
+          cmake_args+=(-D "CMAKE_CXX_FLAGS=$INPUT_CXX_FLAGS")
+        fi
+        if [ -n "$INPUT_OPTIONS" ]; then
+          while IFS= read -r -d '' opt; do
+            cmake_args+=(-D "$opt")
+          done < <(printf '%s' "$INPUT_OPTIONS" | xargs printf '%s\0')
+        fi
+        if [ -n "$INPUT_ARGS" ]; then
+          while IFS= read -r -d '' arg; do
+            cmake_args+=("$arg")
+          done < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
+        fi
+
+        # Serialize args as shell-quoted string for safe eval in later steps
+        QUOTED_CMAKE_ARGS=$(printf '%q ' "${cmake_args[@]}")
+        safe_cmake_args=$(printf '%s' "$QUOTED_CMAKE_ARGS" | tr -d '\n\r')
+        echo "cmake_args=$safe_cmake_args" >> "$GITHUB_OUTPUT"
+
+        if [ "$INPUT_RUN_BUILD" == 'true' ] || [ "$INPUT_RUN_TEST" == 'true' ]; then
+          build_args=(--build "$BUILD_DIR")
+          if [ -n "$INPUT_BUILD_ARGS" ]; then
+            while IFS= read -r -d '' arg; do
+              build_args+=("$arg")
+            done < <(printf '%s' "$INPUT_BUILD_ARGS" | xargs printf '%s\0')
+          fi
+          QUOTED_BUILD_ARGS=$(printf '%q ' "${build_args[@]}")
+          safe_build_args=$(printf '%s' "$QUOTED_BUILD_ARGS" | tr -d '\n\r')
+          echo "cmake_build_args=$safe_build_args" >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ "$INPUT_RUN_TEST" == 'true' ]; then
+          test_args=(--test-dir "$BUILD_DIR" --output-on-failure --no-tests=error)
+          if [ -n "$INPUT_TEST_ARGS" ]; then
+            while IFS= read -r -d '' arg; do
+              test_args+=("$arg")
+            done < <(printf '%s' "$INPUT_TEST_ARGS" | xargs printf '%s\0')
+          fi
+          QUOTED_TEST_ARGS=$(printf '%q ' "${test_args[@]}")
+          safe_test_args=$(printf '%s' "$QUOTED_TEST_ARGS" | tr -d '\n\r')
+          echo "cmake_test_args=$safe_test_args" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Install Ninja
+      if: ${{ inputs.generator == 'Ninja' }}
+      shell: bash
+      run: |
+        case "$OSTYPE" in
+          darwin*)  brew install ninja ;;
+          linux*)   sudo apt install -y ninja-build ;;
+          *)        choco install ninja ;;
+        esac
+    - name: Configure the CMake project
+      shell: bash
+      env:
+        CMAKE_ARGS: ${{ steps.process_inputs.outputs.cmake_args }}
+      run: eval cmake "$CMAKE_ARGS"
+    - name: Build targets
+      if: inputs.run-build != 'false' || inputs.run-test != 'false'
+      shell: bash
+      env:
+        CMAKE_BUILD_ARGS: ${{ steps.process_inputs.outputs.cmake_build_args }}
+      run: eval cmake "$CMAKE_BUILD_ARGS"
+    - name: Run tests
+      if: inputs.run-test != 'false'
+      shell: bash
+      env:
+        CMAKE_TEST_ARGS: ${{ steps.process_inputs.outputs.cmake_test_args }}
+      run: eval ctest "$CMAKE_TEST_ARGS"

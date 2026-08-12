@@ -1,0 +1,54 @@
+name: Test CMake configure with custom options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install CMake
+        run: |
+          cmake --version 2>/dev/null && echo "cmake already installed" || \
+            (apt-get update -y && apt-get install -y cmake)
+      - name: Create minimal CMake project
+        run: |
+          mkdir -p /tmp/cmake-src-options
+          cat > /tmp/cmake-src-options/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(OptionsProject)
+          add_executable(hello hello.c)
+          EOF
+          cat > /tmp/cmake-src-options/hello.c << 'EOF'
+          #include <stdio.h>
+          int main() { printf("Hello\n"); return 0; }
+          EOF
+      - name: Configure CMake project with custom options
+        id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-src-options
+          build-dir: /tmp/cmake-options-build
+          options: CMAKE_BUILD_TYPE=Release
+      - name: Assert build directory was created
+        run: |
+          echo "Checking build directory exists..."
+          if [ ! -d "/tmp/cmake-options-build" ]; then
+            echo "FAIL: build directory /tmp/cmake-options-build was not created"
+            exit 1
+          fi
+          echo "PASS: build directory exists"
+      - name: Assert CMAKE_BUILD_TYPE is set in cache
+        run: |
+          echo "Checking CMakeCache.txt for CMAKE_BUILD_TYPE..."
+          if ! grep -q "CMAKE_BUILD_TYPE" /tmp/cmake-options-build/CMakeCache.txt; then
+            echo "FAIL: CMAKE_BUILD_TYPE not found in CMakeCache.txt"
+            cat /tmp/cmake-options-build/CMakeCache.txt | grep -i build_type || true
+            exit 1
+          fi
+          ACTUAL=$(grep "CMAKE_BUILD_TYPE:STRING" /tmp/cmake-options-build/CMakeCache.txt | cut -d= -f2)
+          echo "actual CMAKE_BUILD_TYPE: $ACTUAL"
+          if [ "$ACTUAL" != "Release" ]; then
+            echo "FAIL: expected CMAKE_BUILD_TYPE=Release, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: CMAKE_BUILD_TYPE=Release found in CMakeCache.txt"
