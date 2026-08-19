@@ -1,4 +1,4 @@
-name: Test Configure Only (No Build)
+name: Test CMake configure only (run-build false)
 on:
   workflow_dispatch:
 jobs:
@@ -6,58 +6,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install cmake
+      - name: Install cmake and build tools
         run: |
-          apt-get update -y && apt-get install -y cmake gcc 2>/dev/null || \
-          (sudo apt-get update -y && sudo apt-get install -y cmake gcc)
-
-      - name: Create a simple CMake project
-        run: |
-          mkdir -p /tmp/cmake-project-cfg
-          cat > /tmp/cmake-project-cfg/CMakeLists.txt << 'EOF'
-          cmake_minimum_required(VERSION 3.10)
-          project(HelloWorld)
-          add_executable(hello main.c)
-          EOF
-          cat > /tmp/cmake-project-cfg/main.c << 'EOF'
-          #include <stdio.h>
-          int main() {
-            printf("Hello, World!\n");
-            return 0;
-          }
-          EOF
-
+          # Try without sudo first (act often runs as root), then with sudo
+          (apt-get update -y && apt-get install -y cmake gcc build-essential) 2>/dev/null || \
+          (sudo apt-get update -y && sudo apt-get install -y cmake gcc build-essential)
+          hash -r
+          cmake --version
       - id: action
         uses: .
         with:
-          source-dir: /tmp/cmake-project-cfg
-          build-dir: /tmp/cmake-build-cfg
-          run-build: false
-
-      - name: Assert build-dir output
+          source-dir: tests/fixtures/basic-project
+          build-dir: /tmp/cmake-configure-only-build
+          run-build: "false"
+      - name: Assert build-dir output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.build-dir }}
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
-          echo "actual build-dir: $ACTUAL"
-          if [ "$ACTUAL" != "/tmp/cmake-build-cfg" ]; then
-            echo "FAIL: expected build-dir to be '/tmp/cmake-build-cfg', got '$ACTUAL'"
+          echo "build-dir: $BUILD_DIR"
+          if [ -z "$BUILD_DIR" ]; then
+            echo "FAIL: build-dir output is empty"
             exit 1
           fi
-          echo "PASS: build-dir output is correct"
-
-      - name: Assert CMake cache was created (configure ran)
+          echo "PASS: build-dir output is set to $BUILD_DIR"
+      - name: Assert CMakeCache.txt was created (configure succeeded)
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
-          if [ ! -f "/tmp/cmake-build-cfg/CMakeCache.txt" ]; then
-            echo "FAIL: CMakeCache.txt not found — configure step did not run"
+          echo "Checking for CMakeCache.txt in $BUILD_DIR"
+          if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found — configure did not succeed"
+            ls -la "$BUILD_DIR" || true
             exit 1
           fi
-          echo "PASS: CMakeCache.txt found (configure ran)"
-
-      - name: Assert executable was NOT built
+          echo "PASS: CMakeCache.txt found"
+      - name: Assert hello binary was NOT built (run-build is false)
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
-          if [ -f "/tmp/cmake-build-cfg/hello" ]; then
-            echo "FAIL: hello executable found — build should not have run"
+          echo "Checking that hello binary does NOT exist in $BUILD_DIR"
+          if find "$BUILD_DIR" -name "hello" -type f | grep -q .; then
+            echo "FAIL: hello binary found — build should not have run"
+            find "$BUILD_DIR" -name "hello" -type f
             exit 1
           fi
-          echo "PASS: hello executable not found (build was skipped)"
+          echo "PASS: hello binary not found (build was skipped as expected)"

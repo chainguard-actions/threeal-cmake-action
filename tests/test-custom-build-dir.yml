@@ -1,4 +1,4 @@
-name: Test CMake with additional configuration args
+name: Test CMake with custom build directory
 on:
   workflow_dispatch:
 jobs:
@@ -18,40 +18,49 @@ jobs:
         uses: .
         with:
           source-dir: tests/fixtures/basic-project
-          build-dir: /tmp/cmake-args-build
-          args: --warn-uninitialized
-          run-build: "true"
-      - name: Assert build-dir output is set
+          build-dir: /tmp/cmake-custom-build
+      - name: Assert build-dir output matches custom directory
         env:
           BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
           echo "build-dir: $BUILD_DIR"
-          if [ -z "$BUILD_DIR" ]; then
-            echo "FAIL: build-dir output is empty"
+          echo "expected:  /tmp/cmake-custom-build"
+          if [ "$BUILD_DIR" != "/tmp/cmake-custom-build" ]; then
+            echo "FAIL: build-dir output does not match expected custom directory"
             exit 1
           fi
-          echo "PASS: build-dir output is set to $BUILD_DIR"
-      - name: Assert CMakeCache.txt was created (configure succeeded)
+          echo "PASS: build-dir output matches custom directory"
+      - name: Assert custom build directory exists
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "Checking custom build directory: $BUILD_DIR"
+          if [ ! -d "$BUILD_DIR" ]; then
+            echo "FAIL: custom build directory does not exist: $BUILD_DIR"
+            exit 1
+          fi
+          echo "PASS: custom build directory exists"
+      - name: Assert CMakeCache.txt is in custom build directory
         env:
           BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
           echo "Checking for CMakeCache.txt in $BUILD_DIR"
           if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
-            echo "FAIL: CMakeCache.txt not found — configure did not succeed"
+            echo "FAIL: CMakeCache.txt not found in custom build directory"
             ls -la "$BUILD_DIR" || true
             exit 1
           fi
-          echo "PASS: CMakeCache.txt found"
-      - name: Assert hello binary was built
+          echo "PASS: CMakeCache.txt found in custom build directory"
+      - name: Assert hello binary is in custom build directory
         env:
           BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
           echo "Checking for hello binary in $BUILD_DIR"
           if find "$BUILD_DIR" -name "hello" -type f | grep -q .; then
-            echo "PASS: hello binary found"
+            echo "PASS: hello binary found in custom build directory"
             find "$BUILD_DIR" -name "hello" -type f
           else
-            echo "FAIL: hello binary not found — build did not succeed"
+            echo "FAIL: hello binary not found in custom build directory"
             ls -la "$BUILD_DIR" || true
             exit 1
           fi

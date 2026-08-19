@@ -1,0 +1,183 @@
+name: Test
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  test-package:
+    name: Test Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with:
+          node-version: latest
+
+      - name: Setup Yarn
+        uses: threeal/setup-yarn-action@ec8c075e62bc497968de40011c2b766f5e8f1ac5 # v2.0.0
+        with:
+          version: stable
+
+      - name: Test Package
+        run: yarn test
+
+  test-action:
+    name: Test Action
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows, ubuntu, macos]
+    steps:
+      - name: Checkout Sample Project
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: threeal/cpp-starter
+          ref: v1.0.0
+
+      - name: Checkout Action
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          path: cmake-action
+          sparse-checkout: |
+            action.yml
+            dist
+          sparse-checkout-cone-mode: false
+
+      - name: Build Sample Project
+        id: cmake-action
+        uses: ./cmake-action
+
+      - name: Run Sample Project
+        env:
+          BUILD_DIR: ${{ steps.cmake-action.outputs.build-dir }}
+          MATRIX_OS: ${{ matrix.os }}
+        run: |
+          if [ "$MATRIX_OS" = "windows" ]; then
+            "$BUILD_DIR/Debug/generate_sequence.exe" 5
+          else
+            "$BUILD_DIR/generate_sequence" 5
+          fi
+
+  test-action-with-specified-dirs:
+    name: Test Action With Specified Directories
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Sample Project
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: threeal/cpp-starter
+          ref: v1.0.0
+          path: project
+
+      - name: Checkout Action
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          path: cmake-action
+          sparse-checkout: |
+            action.yml
+            dist
+          sparse-checkout-cone-mode: false
+
+      - name: Build Sample Project
+        id: cmake-action
+        uses: ./cmake-action
+        with:
+          source-dir: project
+          build-dir: output
+
+      - name: Run Sample Project
+        run: output/generate_sequence 5
+
+  test-action-without-run-build:
+    name: Test Action Without Run Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Sample Project
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: threeal/cpp-starter
+          ref: v1.0.0
+
+      - name: Checkout Action
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          path: cmake-action
+          sparse-checkout: |
+            action.yml
+            dist
+          sparse-checkout-cone-mode: false
+
+      - name: Modify Sample Project
+        run: echo 'invalid' >> src/main.cpp
+
+      - name: Configure Sample Project
+        uses: ./cmake-action
+        with:
+          run-build: false
+
+  test-action-with-additional-options:
+    name: Test Action With Additional Options
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Sample Project
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: threeal/cpp-starter
+          ref: v1.0.0
+
+      - name: Checkout Action
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          path: cmake-action
+          sparse-checkout: |
+            action.yml
+            dist
+          sparse-checkout-cone-mode: false
+
+      - name: Build Sample Project
+        uses: ./cmake-action
+        with:
+          options: BUILD_TESTING=ON
+
+      - name: Test Sample Project
+        uses: threeal/ctest-action@8f90c568a3060a3cffb896e241be14bd3f53d526 # v1.1.0
+
+  test-action-with-custom-generator:
+    name: Test Action With Custom Generator
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Sample Project
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: threeal/cpp-starter
+          ref: v1.0.0
+
+      - name: Checkout Action
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          path: cmake-action
+          sparse-checkout: |
+            action.yml
+            dist
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@96bed6edff20d1dd61ecff9b75cc519d516e6401 # v5
+
+      - name: Configure Sample Project
+        id: cmake-action
+        uses: ./cmake-action
+        with:
+          generator: Ninja
+          run-build: false
+
+      - name: Build Sample Project
+        env:
+          BUILD_DIR: ${{ steps.cmake-action.outputs.build-dir }}
+        run: ninja -C "$BUILD_DIR"

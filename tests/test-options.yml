@@ -1,4 +1,4 @@
-name: Test CMake with additional configuration args
+name: Test CMake with options
 on:
   workflow_dispatch:
 jobs:
@@ -17,9 +17,9 @@ jobs:
       - id: action
         uses: .
         with:
-          source-dir: tests/fixtures/basic-project
-          build-dir: /tmp/cmake-args-build
-          args: --warn-uninitialized
+          source-dir: tests/fixtures/options-project
+          build-dir: /tmp/cmake-options-build
+          options: MY_OPTION=ON
           run-build: "true"
       - name: Assert build-dir output is set
         env:
@@ -30,18 +30,18 @@ jobs:
             echo "FAIL: build-dir output is empty"
             exit 1
           fi
-          echo "PASS: build-dir output is set to $BUILD_DIR"
-      - name: Assert CMakeCache.txt was created (configure succeeded)
+          echo "PASS: build-dir output is set"
+      - name: Assert CMakeCache.txt contains MY_OPTION=ON
         env:
           BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
-          echo "Checking for CMakeCache.txt in $BUILD_DIR"
-          if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
-            echo "FAIL: CMakeCache.txt not found — configure did not succeed"
-            ls -la "$BUILD_DIR" || true
+          echo "Checking CMakeCache.txt for MY_OPTION=ON in $BUILD_DIR"
+          if ! grep -q "MY_OPTION:BOOL=ON" "$BUILD_DIR/CMakeCache.txt"; then
+            echo "FAIL: MY_OPTION=ON not found in CMakeCache.txt"
+            grep "MY_OPTION" "$BUILD_DIR/CMakeCache.txt" || echo "(MY_OPTION not in cache)"
             exit 1
           fi
-          echo "PASS: CMakeCache.txt found"
+          echo "PASS: MY_OPTION=ON found in CMakeCache.txt"
       - name: Assert hello binary was built
         env:
           BUILD_DIR: ${{ steps.action.outputs.build-dir }}
@@ -51,7 +51,7 @@ jobs:
             echo "PASS: hello binary found"
             find "$BUILD_DIR" -name "hello" -type f
           else
-            echo "FAIL: hello binary not found — build did not succeed"
+            echo "FAIL: hello binary not found"
             ls -la "$BUILD_DIR" || true
             exit 1
           fi

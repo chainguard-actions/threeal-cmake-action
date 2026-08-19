@@ -1,4 +1,4 @@
-name: Test CMake with additional configuration args
+name: Test CMake with C++ compiler flags
 on:
   workflow_dispatch:
 jobs:
@@ -9,17 +9,17 @@ jobs:
       - name: Install cmake and build tools
         run: |
           # Try without sudo first (act often runs as root), then with sudo
-          (apt-get update -y && apt-get install -y cmake gcc build-essential) 2>/dev/null || \
-          (sudo apt-get update -y && sudo apt-get install -y cmake gcc build-essential)
+          (apt-get update -y && apt-get install -y cmake g++ build-essential) 2>/dev/null || \
+          (sudo apt-get update -y && sudo apt-get install -y cmake g++ build-essential)
           hash -r
           cmake --version
-          gcc --version
+          g++ --version
       - id: action
         uses: .
         with:
-          source-dir: tests/fixtures/basic-project
-          build-dir: /tmp/cmake-args-build
-          args: --warn-uninitialized
+          source-dir: tests/fixtures/flags-project
+          build-dir: /tmp/cmake-cxx-flags-build
+          cxx-flags: -Wall
           run-build: "true"
       - name: Assert build-dir output is set
         env:
@@ -42,16 +42,16 @@ jobs:
             exit 1
           fi
           echo "PASS: CMakeCache.txt found"
-      - name: Assert hello binary was built
+      - name: Assert C++ binary was built
         env:
           BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
-          echo "Checking for hello binary in $BUILD_DIR"
-          if find "$BUILD_DIR" -name "hello" -type f | grep -q .; then
-            echo "PASS: hello binary found"
-            find "$BUILD_DIR" -name "hello" -type f
+          echo "Checking for hello_cxx binary in $BUILD_DIR"
+          if find "$BUILD_DIR" -name "hello_cxx" -type f | grep -q .; then
+            echo "PASS: hello_cxx binary found"
+            find "$BUILD_DIR" -name "hello_cxx" -type f
           else
-            echo "FAIL: hello binary not found — build did not succeed"
+            echo "FAIL: hello_cxx binary not found — build did not succeed"
             ls -la "$BUILD_DIR" || true
             exit 1
           fi
