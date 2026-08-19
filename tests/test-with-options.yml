@@ -1,0 +1,71 @@
+name: Test CMake with custom options and flags
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install CMake
+        run: |
+          apt-get update -y && apt-get install -y cmake gcc || \
+          (sudo apt-get update -y && sudo apt-get install -y cmake gcc)
+
+      - name: Create a CMake project with a custom option
+        run: |
+          mkdir -p /tmp/cmake-project-opts
+          cat > /tmp/cmake-project-opts/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(HelloWorld)
+          option(ENABLE_FEATURE "Enable a feature" OFF)
+          if(ENABLE_FEATURE)
+            message(STATUS "Feature is enabled")
+          endif()
+          add_executable(hello main.c)
+          EOF
+          cat > /tmp/cmake-project-opts/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+            printf("Hello, World!\n");
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-project-opts
+          build-dir: /tmp/cmake-build-opts
+          options: ENABLE_FEATURE=ON
+          c-flags: -O2
+          run-build: true
+
+      - name: Assert build-dir output
+        env:
+          ACTUAL: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "actual build-dir: $ACTUAL"
+          if [ "$ACTUAL" != "/tmp/cmake-build-opts" ]; then
+            echo "FAIL: expected build-dir to be '/tmp/cmake-build-opts', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: build-dir output is correct"
+
+      - name: Assert CMakeCache contains the option
+        run: |
+          if ! grep -q "ENABLE_FEATURE:BOOL=ON" /tmp/cmake-build-opts/CMakeCache.txt; then
+            echo "FAIL: expected ENABLE_FEATURE=ON in CMakeCache.txt"
+            cat /tmp/cmake-build-opts/CMakeCache.txt || true
+            exit 1
+          fi
+          echo "PASS: ENABLE_FEATURE=ON found in CMakeCache.txt"
+
+      - name: Assert binary was built
+        run: |
+          if [ ! -f "/tmp/cmake-build-opts/hello" ]; then
+            echo "FAIL: expected built binary '/tmp/cmake-build-opts/hello' not found"
+            ls -la /tmp/cmake-build-opts/ || true
+            exit 1
+          fi
+          echo "PASS: built binary exists"

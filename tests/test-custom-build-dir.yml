@@ -1,0 +1,56 @@
+name: Test custom build directory
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake gcc
+
+      - name: Create a simple CMake project
+        run: |
+          mkdir -p /tmp/cmake-src
+          cat > /tmp/cmake-src/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(MyApp)
+          add_executable(myapp main.c)
+          EOF
+          cat > /tmp/cmake-src/main.c << 'EOF'
+          int main() { return 0; }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-src
+          build-dir: /tmp/cmake-custom-build
+          run-build: true
+
+      - name: Assert build-dir output matches custom path
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "build-dir: $BUILD_DIR"
+          if [ "$BUILD_DIR" != "/tmp/cmake-custom-build" ]; then
+            echo "FAIL: expected build-dir '/tmp/cmake-custom-build', got '$BUILD_DIR'"
+            exit 1
+          fi
+          echo "PASS: build-dir output matches custom path"
+
+      - name: Assert build artifacts exist in custom directory
+        run: |
+          if [ ! -d "/tmp/cmake-custom-build" ]; then
+            echo "FAIL: custom build directory does not exist"
+            exit 1
+          fi
+          if [ ! -f "/tmp/cmake-custom-build/myapp" ]; then
+            echo "FAIL: expected executable 'myapp' not found in /tmp/cmake-custom-build"
+            ls -la /tmp/cmake-custom-build || true
+            exit 1
+          fi
+          echo "PASS: build artifacts exist in custom directory"

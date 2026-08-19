@@ -1,0 +1,79 @@
+name: Test CMake generator input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake gcc make
+
+      - name: Create a simple CMake project
+        run: |
+          mkdir -p /tmp/cmake-gen-src
+          cat > /tmp/cmake-gen-src/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(GeneratorTest C)
+          add_executable(gentest main.c)
+          EOF
+          cat > /tmp/cmake-gen-src/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+            printf("Hello from generator test!\n");
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-gen-src
+          build-dir: /tmp/cmake-gen-build
+          generator: Unix Makefiles
+          run-build: true
+
+      - name: Assert build-dir output is set
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "build-dir: $BUILD_DIR"
+          if [ -z "$BUILD_DIR" ]; then
+            echo "FAIL: build-dir output is empty"
+            exit 1
+          fi
+          echo "PASS: build-dir output is set to $BUILD_DIR"
+
+      - name: Assert Makefile was generated (Unix Makefiles generator)
+        run: |
+          if [ ! -f "/tmp/cmake-gen-build/Makefile" ]; then
+            echo "FAIL: Makefile not found — Unix Makefiles generator did not produce expected output"
+            ls -la /tmp/cmake-gen-build || true
+            exit 1
+          fi
+          echo "PASS: Makefile found — Unix Makefiles generator worked correctly"
+
+      - name: Assert CMakeCache records the generator
+        run: |
+          if [ ! -f "/tmp/cmake-gen-build/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found"
+            exit 1
+          fi
+          if ! grep -q "CMAKE_GENERATOR" /tmp/cmake-gen-build/CMakeCache.txt; then
+            echo "FAIL: CMAKE_GENERATOR not found in CMakeCache.txt"
+            cat /tmp/cmake-gen-build/CMakeCache.txt || true
+            exit 1
+          fi
+          echo "PASS: CMAKE_GENERATOR found in CMakeCache.txt"
+
+      - name: Assert build artifact exists
+        run: |
+          if [ ! -f "/tmp/cmake-gen-build/gentest" ]; then
+            echo "FAIL: expected executable 'gentest' not found"
+            ls -la /tmp/cmake-gen-build || true
+            exit 1
+          fi
+          echo "PASS: build artifact exists"

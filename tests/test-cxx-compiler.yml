@@ -1,0 +1,77 @@
+name: Test C++ compiler and flags
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake g++
+
+      - name: Create a C++ CMake project
+        run: |
+          mkdir -p /tmp/cmake-cxx-src
+          cat > /tmp/cmake-cxx-src/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(CxxTest CXX)
+          set(CMAKE_CXX_STANDARD 17)
+          add_executable(cxxtest main.cpp)
+          EOF
+          cat > /tmp/cmake-cxx-src/main.cpp << 'EOF'
+          #include <iostream>
+          int main() {
+            std::cout << "Hello from C++!" << std::endl;
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-cxx-src
+          build-dir: /tmp/cmake-cxx-build
+          cxx-compiler: g++
+          cxx-flags: -Wall -O2
+          run-build: true
+
+      - name: Assert build-dir output is set
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "build-dir: $BUILD_DIR"
+          if [ -z "$BUILD_DIR" ]; then
+            echo "FAIL: build-dir output is empty"
+            exit 1
+          fi
+          echo "PASS: build-dir output is set"
+
+      - name: Assert CMakeCache contains the CXX compiler
+        run: |
+          if [ ! -f "/tmp/cmake-cxx-build/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found"
+            exit 1
+          fi
+          if ! grep -q "CMAKE_CXX_COMPILER" /tmp/cmake-cxx-build/CMakeCache.txt; then
+            echo "FAIL: CMAKE_CXX_COMPILER not found in CMakeCache.txt"
+            exit 1
+          fi
+          echo "PASS: CMAKE_CXX_COMPILER found in CMakeCache.txt"
+
+      - name: Assert C++ executable was built and runs correctly
+        run: |
+          if [ ! -f "/tmp/cmake-cxx-build/cxxtest" ]; then
+            echo "FAIL: executable 'cxxtest' not found"
+            ls -la /tmp/cmake-cxx-build || true
+            exit 1
+          fi
+          OUTPUT=$(/tmp/cmake-cxx-build/cxxtest)
+          echo "Output: $OUTPUT"
+          if [ "$OUTPUT" != "Hello from C++!" ]; then
+            echo "FAIL: expected 'Hello from C++!', got '$OUTPUT'"
+            exit 1
+          fi
+          echo "PASS: C++ executable runs correctly"

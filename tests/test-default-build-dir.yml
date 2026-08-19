@@ -1,0 +1,70 @@
+name: Test CMake with default build directory
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install CMake
+        run: |
+          apt-get update -y && apt-get install -y cmake gcc || \
+          (sudo apt-get update -y && sudo apt-get install -y cmake gcc)
+
+      - name: Create a minimal CMake project
+        run: |
+          mkdir -p /tmp/cmake-project-default
+          cat > /tmp/cmake-project-default/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(HelloWorld)
+          add_executable(hello main.c)
+          EOF
+          cat > /tmp/cmake-project-default/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+            printf("Hello, World!\n");
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-project-default
+
+      - name: Assert build-dir output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "actual build-dir: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: build-dir output should not be empty"
+            exit 1
+          fi
+          echo "PASS: build-dir output is set to '$ACTUAL'"
+
+      - name: Assert default build-dir is source-dir/build
+        env:
+          ACTUAL: ${{ steps.action.outputs.build-dir }}
+        run: |
+          EXPECTED="/tmp/cmake-project-default/build"
+          echo "actual: $ACTUAL"
+          echo "expected: $EXPECTED"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "FAIL: expected default build-dir to be '$EXPECTED', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: default build-dir is correct"
+
+      - name: Assert CMakeCache exists in reported build dir
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "Checking for CMakeCache.txt in: $BUILD_DIR"
+          if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found in reported build-dir '$BUILD_DIR'"
+            ls -la "$BUILD_DIR" || true
+            exit 1
+          fi
+          echo "PASS: CMakeCache.txt found in reported build-dir"

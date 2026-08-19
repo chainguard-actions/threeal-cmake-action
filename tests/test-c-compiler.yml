@@ -1,0 +1,76 @@
+name: Test C compiler input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake gcc
+
+      - name: Create a simple C CMake project
+        run: |
+          mkdir -p /tmp/cmake-cc-src
+          cat > /tmp/cmake-cc-src/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(CCompilerTest C)
+          add_executable(cctest main.c)
+          EOF
+          cat > /tmp/cmake-cc-src/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+            printf("Hello from C compiler test!\n");
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-cc-src
+          build-dir: /tmp/cmake-cc-build
+          c-compiler: gcc
+          run-build: true
+
+      - name: Assert build-dir output is set
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "build-dir: $BUILD_DIR"
+          if [ -z "$BUILD_DIR" ]; then
+            echo "FAIL: build-dir output is empty"
+            exit 1
+          fi
+          echo "PASS: build-dir output is set to $BUILD_DIR"
+
+      - name: Assert CMakeCache contains the C compiler
+        run: |
+          if [ ! -f "/tmp/cmake-cc-build/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found"
+            exit 1
+          fi
+          if ! grep -q "CMAKE_C_COMPILER" /tmp/cmake-cc-build/CMakeCache.txt; then
+            echo "FAIL: CMAKE_C_COMPILER not found in CMakeCache.txt"
+            cat /tmp/cmake-cc-build/CMakeCache.txt || true
+            exit 1
+          fi
+          echo "PASS: CMAKE_C_COMPILER found in CMakeCache.txt"
+
+      - name: Assert C executable was built and runs correctly
+        run: |
+          if [ ! -f "/tmp/cmake-cc-build/cctest" ]; then
+            echo "FAIL: executable 'cctest' not found"
+            ls -la /tmp/cmake-cc-build || true
+            exit 1
+          fi
+          OUTPUT=$(/tmp/cmake-cc-build/cctest)
+          echo "Output: $OUTPUT"
+          if [ "$OUTPUT" != "Hello from C compiler test!" ]; then
+            echo "FAIL: unexpected output: $OUTPUT"
+            exit 1
+          fi
+          echo "PASS: C executable runs correctly"

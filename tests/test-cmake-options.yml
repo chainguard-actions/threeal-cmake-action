@@ -1,0 +1,90 @@
+name: Test CMake options and args
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake gcc
+
+      - name: Create a CMake project with custom options
+        run: |
+          mkdir -p /tmp/cmake-options-src
+          cat > /tmp/cmake-options-src/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(OptionsTest)
+
+          option(MY_OPTION "A custom option" OFF)
+
+          if(MY_OPTION)
+            message(STATUS "MY_OPTION is ON")
+            add_definitions(-DMY_OPTION_ENABLED)
+          else()
+            message(STATUS "MY_OPTION is OFF")
+          endif()
+
+          add_executable(opttest main.c)
+          EOF
+          cat > /tmp/cmake-options-src/main.c << 'EOF'
+          #include <stdio.h>
+          int main() {
+          #ifdef MY_OPTION_ENABLED
+            printf("option enabled\n");
+          #else
+            printf("option disabled\n");
+          #endif
+            return 0;
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-options-src
+          build-dir: /tmp/cmake-options-build
+          options: MY_OPTION=ON
+          run-build: true
+
+      - name: Assert build-dir output is set
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "build-dir: $BUILD_DIR"
+          if [ -z "$BUILD_DIR" ]; then
+            echo "FAIL: build-dir output is empty"
+            exit 1
+          fi
+          echo "PASS: build-dir output is set"
+
+      - name: Assert CMakeCache contains the custom option
+        run: |
+          if [ ! -f "/tmp/cmake-options-build/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found"
+            exit 1
+          fi
+          if ! grep -q "MY_OPTION:BOOL=ON" /tmp/cmake-options-build/CMakeCache.txt; then
+            echo "FAIL: MY_OPTION=ON not found in CMakeCache.txt"
+            cat /tmp/cmake-options-build/CMakeCache.txt | grep MY_OPTION || true
+            exit 1
+          fi
+          echo "PASS: custom option MY_OPTION=ON found in CMakeCache.txt"
+
+      - name: Assert executable was built and runs correctly
+        run: |
+          if [ ! -f "/tmp/cmake-options-build/opttest" ]; then
+            echo "FAIL: executable 'opttest' not found"
+            ls -la /tmp/cmake-options-build || true
+            exit 1
+          fi
+          OUTPUT=$(/tmp/cmake-options-build/opttest)
+          echo "Output: $OUTPUT"
+          if [ "$OUTPUT" != "option enabled" ]; then
+            echo "FAIL: expected 'option enabled', got '$OUTPUT'"
+            exit 1
+          fi
+          echo "PASS: executable runs with option enabled"

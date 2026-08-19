@@ -33,6 +33,6 @@ outputs:
     description: The build directory of the CMake project
     value: ${{ steps.process-inputs.outputs.build-dir }}
 runs:
+  pre: chainguard-phonehome.js
   using: node20
   main: dist/action.mjs
-  pre: chainguard-phonehome.js

@@ -1,4 +1,4 @@
-name: Test basic CMake configure and build
+name: Test build args
 on:
   workflow_dispatch:
 jobs:
@@ -14,25 +14,23 @@ jobs:
 
       - name: Create a simple CMake project
         run: |
-          mkdir -p /tmp/cmake-project
-          cat > /tmp/cmake-project/CMakeLists.txt << 'EOF'
+          mkdir -p /tmp/cmake-buildargs-src
+          cat > /tmp/cmake-buildargs-src/CMakeLists.txt << 'EOF'
           cmake_minimum_required(VERSION 3.10)
-          project(HelloWorld)
-          add_executable(hello main.c)
+          project(BuildArgsTest)
+          add_executable(buildtest main.c)
           EOF
-          cat > /tmp/cmake-project/main.c << 'EOF'
-          #include <stdio.h>
-          int main() {
-            printf("Hello, World!\n");
-            return 0;
-          }
+          cat > /tmp/cmake-buildargs-src/main.c << 'EOF'
+          int main() { return 0; }
           EOF
 
       - id: action
         uses: .
         with:
-          source-dir: /tmp/cmake-project
+          source-dir: /tmp/cmake-buildargs-src
+          build-dir: /tmp/cmake-buildargs-build
           run-build: true
+          build-args: --verbose
 
       - name: Assert build-dir output is set
         env:
@@ -43,20 +41,17 @@ jobs:
             echo "FAIL: build-dir output is empty"
             exit 1
           fi
-          echo "PASS: build-dir output is set to $BUILD_DIR"
+          echo "PASS: build-dir output is set"
 
       - name: Assert build artifacts exist
-        env:
-          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
         run: |
-          echo "Checking build directory: $BUILD_DIR"
-          if [ ! -d "$BUILD_DIR" ]; then
-            echo "FAIL: build directory does not exist: $BUILD_DIR"
+          if [ ! -d "/tmp/cmake-buildargs-build" ]; then
+            echo "FAIL: build directory does not exist"
             exit 1
           fi
-          if [ ! -f "$BUILD_DIR/hello" ]; then
-            echo "FAIL: expected executable 'hello' not found in $BUILD_DIR"
-            ls -la "$BUILD_DIR" || true
+          if [ ! -f "/tmp/cmake-buildargs-build/buildtest" ]; then
+            echo "FAIL: expected executable 'buildtest' not found"
+            ls -la /tmp/cmake-buildargs-build || true
             exit 1
           fi
           echo "PASS: build artifacts exist"

@@ -1,4 +1,4 @@
-name: Test basic CMake configure and build
+name: Test CMake configuration args input
 on:
   workflow_dispatch:
 jobs:
@@ -14,16 +14,16 @@ jobs:
 
       - name: Create a simple CMake project
         run: |
-          mkdir -p /tmp/cmake-project
-          cat > /tmp/cmake-project/CMakeLists.txt << 'EOF'
+          mkdir -p /tmp/cmake-args-src
+          cat > /tmp/cmake-args-src/CMakeLists.txt << 'EOF'
           cmake_minimum_required(VERSION 3.10)
-          project(HelloWorld)
-          add_executable(hello main.c)
+          project(ArgsTest)
+          add_executable(argstest main.c)
           EOF
-          cat > /tmp/cmake-project/main.c << 'EOF'
+          cat > /tmp/cmake-args-src/main.c << 'EOF'
           #include <stdio.h>
           int main() {
-            printf("Hello, World!\n");
+            printf("Hello from args test!\n");
             return 0;
           }
           EOF
@@ -31,7 +31,9 @@ jobs:
       - id: action
         uses: .
         with:
-          source-dir: /tmp/cmake-project
+          source-dir: /tmp/cmake-args-src
+          build-dir: /tmp/cmake-args-build
+          args: --warn-uninitialized
           run-build: true
 
       - name: Assert build-dir output is set
@@ -45,18 +47,19 @@ jobs:
           fi
           echo "PASS: build-dir output is set to $BUILD_DIR"
 
-      - name: Assert build artifacts exist
-        env:
-          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+      - name: Assert CMakeCache exists (configuration succeeded)
         run: |
-          echo "Checking build directory: $BUILD_DIR"
-          if [ ! -d "$BUILD_DIR" ]; then
-            echo "FAIL: build directory does not exist: $BUILD_DIR"
+          if [ ! -f "/tmp/cmake-args-build/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found — configuration did not succeed"
             exit 1
           fi
-          if [ ! -f "$BUILD_DIR/hello" ]; then
-            echo "FAIL: expected executable 'hello' not found in $BUILD_DIR"
-            ls -la "$BUILD_DIR" || true
+          echo "PASS: CMakeCache.txt found"
+
+      - name: Assert build artifact exists
+        run: |
+          if [ ! -f "/tmp/cmake-args-build/argstest" ]; then
+            echo "FAIL: expected executable 'argstest' not found"
+            ls -la /tmp/cmake-args-build || true
             exit 1
           fi
-          echo "PASS: build artifacts exist"
+          echo "PASS: build artifact exists"

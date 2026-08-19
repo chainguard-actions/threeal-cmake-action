@@ -1,0 +1,60 @@
+name: Test configure only (no build)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cmake and build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake gcc
+
+      - name: Create a simple CMake project
+        run: |
+          mkdir -p /tmp/cmake-configure-only
+          cat > /tmp/cmake-configure-only/CMakeLists.txt << 'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          project(ConfigureOnly)
+          add_executable(configonly main.c)
+          EOF
+          cat > /tmp/cmake-configure-only/main.c << 'EOF'
+          int main() { return 0; }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          source-dir: /tmp/cmake-configure-only
+          build-dir: /tmp/cmake-configure-only-build
+          run-build: false
+
+      - name: Assert build-dir output is set
+        env:
+          BUILD_DIR: ${{ steps.action.outputs.build-dir }}
+        run: |
+          echo "build-dir: $BUILD_DIR"
+          if [ -z "$BUILD_DIR" ]; then
+            echo "FAIL: build-dir output is empty"
+            exit 1
+          fi
+          echo "PASS: build-dir output is set"
+
+      - name: Assert CMakeCache.txt exists (configure ran)
+        run: |
+          if [ ! -f "/tmp/cmake-configure-only-build/CMakeCache.txt" ]; then
+            echo "FAIL: CMakeCache.txt not found — configure did not run"
+            ls -la /tmp/cmake-configure-only-build || true
+            exit 1
+          fi
+          echo "PASS: CMakeCache.txt exists, configure ran successfully"
+
+      - name: Assert executable was NOT built
+        run: |
+          if [ -f "/tmp/cmake-configure-only-build/configonly" ]; then
+            echo "FAIL: executable 'configonly' should not exist when run-build is false"
+            exit 1
+          fi
+          echo "PASS: executable not built as expected"
