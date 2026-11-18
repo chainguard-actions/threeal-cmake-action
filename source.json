@@ -4,8 +4,13 @@
   "version": "v2.0.0",
   "commit_sha": "f0425ca4df398f15fcdb5a2dd32d540fd6f22dcd",
   "url": "https://github.com/threeal/cmake-action",
-  "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",
+  "policy_sha": "374911c4be584df24e6da57af2d990570ef0f859",
   "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
   "test_agent_version": "2",
-  "harden_agent_version": "2"
+  "harden_agent_version": "2",
+  "dist_artifact": {
+    "gcs_uri": "gs://patch-actions-node-artifacts/dist-artifacts/threeal/cmake-action/v2.0.0/sha256-eeb3fcc6b820ba85d06edf81e58f3631b0f297a23b5391055f7762a8ab53d877.tar.gz",
+    "sha256": "eeb3fcc6b820ba85d06edf81e58f3631b0f297a23b5391055f7762a8ab53d877",
+    "size_bytes": 245382
+  }
 }
